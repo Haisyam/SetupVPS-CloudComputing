@@ -225,50 +225,109 @@ rm /var/www/html/info.php
 
 ---
 
-## 7. Install MySQL Server
+## 7. Install dan Konfigurasi MySQL Server
 
-Install MySQL:
+> **Penting:** MySQL harus diinstall dan dikonfigurasi terlebih dahulu sebelum menginstall phpMyAdmin di Tahap 14. Langkah-langkah di bawah ini juga mencakup antisipasi agar instalasi phpMyAdmin tidak gagal karena aturan password policy MySQL.
 
-```bash
-apt install mysql-server -y
-```
-
-Aktifkan MySQL:
+### 7.1 Install MySQL Server
 
 ```bash
-systemctl enable mysql
-systemctl start mysql
+sudo apt update
+sudo apt install mysql-server -y
 ```
 
-Cek status:
+### 7.2 Aktifkan dan Jalankan Service MySQL
 
 ```bash
-systemctl status mysql
+sudo systemctl enable mysql
+sudo systemctl start mysql
+sudo systemctl status mysql
 ```
 
-Jalankan konfigurasi keamanan:
+Pastikan status menunjukkan `active (running)`.
+
+### 7.3 Jalankan Konfigurasi Keamanan MySQL
 
 ```bash
-mysql_secure_installation
+sudo mysql_secure_installation
 ```
 
-Rekomendasi pilihan:
+Saat proses berjalan, akan muncul beberapa pertanyaan. Ikuti rekomendasi berikut:
+
+**Pertanyaan pertama — VALIDATE PASSWORD COMPONENT:**
 
 ```text
-VALIDATE PASSWORD: boleh Y atau N
-Remove anonymous users: Y
-Disallow root login remotely: Y
-Remove test database: Y
-Reload privilege tables: Y
+VALIDATE PASSWORD COMPONENT can be used to test passwords
+and improve security. It checks the strength of password
+and allows the users to set only those passwords which are
+secure enough. Would you like to setup VALIDATE PASSWORD component?
+
+Press y|Y for Yes, any other key for No:
 ```
 
-Masuk MySQL:
+> ⚠️ **Pilih: `N`**
+>
+> **Penjelasan:** Pilih `N` agar password policy MySQL tidak terlalu ketat. Jika memilih `Y`, MySQL akan menerapkan aturan password yang sangat ketat dan bisa menyebabkan error saat instalasi phpMyAdmin di Tahap 14, yaitu:
+>
+> ```text
+> ERROR 1819 (HY000): Your password does not satisfy the current policy requirements
+> ```
+
+Setelah itu, ikuti pertanyaan selanjutnya:
+
+```text
+Set root password?             : Y (lalu masukkan password root MySQL)
+Remove anonymous users?        : Y
+Disallow root login remotely?  : Y
+Remove test database?          : Y
+Reload privilege tables?       : Y
+```
+
+### 7.4 Nonaktifkan Password Policy (Antisipasi phpMyAdmin)
+
+Meskipun sudah memilih `N` pada langkah di atas, ada kemungkinan komponen password policy sudah aktif dari sebelumnya. Langkah ini memastikan komponen tersebut benar-benar mati sebelum install phpMyAdmin.
+
+Masuk ke MySQL:
 
 ```bash
-mysql
+sudo mysql
 ```
 
-Contoh membuat database dan user:
+Cek apakah komponen password policy masih aktif:
+
+```sql
+SELECT * FROM mysql.component;
+```
+
+Jika hasil query menampilkan baris yang berisi:
+
+```text
+file://component_validate_password
+```
+
+Maka **matikan sementara** dengan perintah berikut:
+
+```sql
+UNINSTALL COMPONENT 'file://component_validate_password';
+```
+
+Keluar dari MySQL:
+
+```sql
+EXIT;
+```
+
+> 💡 **Mengapa langkah ini penting?**
+>
+> Langkah ini adalah **antisipasi** agar instalasi phpMyAdmin di Tahap 14 tidak gagal. Saat install phpMyAdmin, sistem akan otomatis membuat user dan database internal. Jika password policy MySQL aktif, proses ini bisa gagal karena password default phpMyAdmin dianggap tidak memenuhi kebijakan. Setelah phpMyAdmin berhasil terinstall, password policy bisa diaktifkan kembali (lihat bagian akhir Tahap 14).
+
+### 7.5 Contoh Membuat Database dan User (Opsional)
+
+Langkah ini bisa dilakukan sekarang atau nanti setelah semua service siap.
+
+```bash
+sudo mysql
+```
 
 ```sql
 CREATE DATABASE nama_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -570,144 +629,246 @@ systemctl restart apache2
 
 ---
 
-## 14. Install phpMyAdmin
+## 14. Install dan Konfigurasi phpMyAdmin
 
-Install phpMyAdmin:
+> **Catatan:** Pastikan Tahap 7 (Install dan Konfigurasi MySQL Server) sudah selesai dilakukan, termasuk menonaktifkan password policy MySQL. Jika belum, instalasi phpMyAdmin bisa gagal dengan error `ERROR 1819 (HY000)`.
+
+### 14.1 Install phpMyAdmin
 
 ```bash
-apt install phpmyadmin -y
+sudo apt update
+sudo apt install phpmyadmin -y
 ```
 
-Saat muncul pilihan:
+Saat proses instalasi, akan muncul beberapa dialog konfigurasi. Ikuti langkah berikut dengan teliti:
+
+**Pilihan Web Server:**
+
+```text
+┌─ Configuring phpmyadmin ─────────────────────────┐
+│ Web server to reconfigure automatically:         │
+│                                                   │
+│    [ ] apache2                                    │
+│    [ ] lighttpd                                   │
+│                                                   │
+└───────────────────────────────────────────────────┘
+```
+
+> ⚠️ **Penting:**
+>
+> 1. Arahkan kursor ke **`apache2`**
+> 2. Tekan tombol **`Space`** sampai muncul tanda **`[*] apache2`**
+> 3. Baru kemudian tekan **`Enter`**
+>
+> **Jangan langsung tekan Enter sebelum `apache2` tercentang!** Jika langsung tekan Enter tanpa memilih, phpMyAdmin tidak akan terhubung ke Apache dan halaman `/phpmyadmin` tidak bisa diakses.
+
+**Konfigurasi Database:**
 
 ```text
 Configure database for phpmyadmin with dbconfig-common?
 ```
 
-Pilih:
+Pilih: **`Yes`**
 
-```text
-Yes
-```
+**Password phpMyAdmin:**
 
-Saat memilih web server, pilih:
-
-```text
-apache2
-```
-
-Tekan `Space` sampai muncul tanda `[*]`, lalu tekan `Enter`.
-
-Gunakan password kuat untuk database phpMyAdmin, contoh:
+Masukkan password yang kuat untuk database internal phpMyAdmin, contoh:
 
 ```text
 PmaAdmin@2026!
 ```
 
+### 14.2 Aktifkan Konfigurasi phpMyAdmin di Apache
+
+Setelah instalasi selesai, pastikan konfigurasi phpMyAdmin aktif di Apache. Jalankan perintah berikut:
+
+```bash
+sudo ln -s /etc/phpmyadmin/apache.conf /etc/apache2/conf-available/phpmyadmin.conf
+sudo a2enconf phpmyadmin
+sudo systemctl reload apache2
+```
+
+> 💡 **Penjelasan:** Perintah `ln -s` membuat symbolic link dari file konfigurasi phpMyAdmin ke folder Apache. Jika link sudah ada sebelumnya, perintah ini akan menampilkan pesan error yang bisa diabaikan. Perintah `a2enconf` mengaktifkan konfigurasi tersebut, dan `systemctl reload` memuat ulang Apache tanpa downtime.
+
+### 14.3 Cek Akses phpMyAdmin di Browser
+
+Buka browser dan akses salah satu URL berikut:
+
+```text
+http://IP-VPS/phpmyadmin
+```
+
+atau jika sudah menggunakan domain:
+
+```text
+http://domainkamu.com/phpmyadmin
+```
+
+Jika halaman login phpMyAdmin muncul, berarti instalasi berhasil.
+
+### 14.4 Buat User Login phpMyAdmin
+
+> ⚠️ **Mengapa harus buat user baru?**
+>
+> User `root` MySQL di Ubuntu secara default menggunakan metode autentikasi `auth_socket`, yang berarti hanya bisa diakses dari terminal Linux menggunakan `sudo mysql`. User `root` **tidak bisa** digunakan untuk login phpMyAdmin melalui browser. Oleh karena itu, kita perlu membuat user baru.
+
+#### Opsi A: User Admin (Akses Semua Database)
+
+User ini cocok untuk kebutuhan administrasi atau pembelajaran.
+
+```bash
+sudo mysql
+```
+
+```sql
+CREATE USER 'admin_db'@'localhost' IDENTIFIED BY 'AdminDB@2026!';
+GRANT ALL PRIVILEGES ON *.* TO 'admin_db'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Login phpMyAdmin dengan user admin:
+
+```text
+URL      : http://IP-VPS/phpmyadmin
+Username : admin_db
+Password : AdminDB@2026!
+```
+
+#### Opsi B: User Khusus Per Database (Lebih Aman)
+
+User ini hanya bisa mengakses satu database tertentu. Cocok untuk project production.
+
+```bash
+sudo mysql
+```
+
+```sql
+CREATE DATABASE web_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'web_user'@'localhost' IDENTIFIED BY 'WebUser@2026!';
+GRANT ALL PRIVILEGES ON web_app.* TO 'web_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Login phpMyAdmin dengan user khusus:
+
+```text
+URL      : http://IP-VPS/phpmyadmin
+Username : web_user
+Password : WebUser@2026!
+```
+
+#### Perbedaan Kedua User
+
+| User | Hak Akses | Cocok Untuk |
+|------|-----------|-------------|
+| `admin_db` | Bisa mengelola **semua database** | Administrasi, development, pembelajaran |
+| `web_user` | Hanya bisa mengelola database **`web_app`** | Project production, keamanan lebih baik |
+
+> 🔒 **Catatan Keamanan:**
+>
+> Untuk pembelajaran boleh menggunakan `admin_db`, tetapi untuk project production **lebih disarankan** membuat user khusus per database seperti `web_user`. Dengan begitu, jika satu user bocor, database lain tetap aman.
+
+### 14.5 Aktifkan Kembali Password Policy MySQL (Opsional)
+
+Jika phpMyAdmin sudah berhasil terinstall dan semua user sudah dibuat, Anda bisa mengaktifkan kembali password policy MySQL untuk meningkatkan keamanan:
+
+```bash
+sudo mysql
+```
+
+```sql
+INSTALL COMPONENT 'file://component_validate_password';
+EXIT;
+```
+
+> 💡 Setelah diaktifkan, semua password baru yang dibuat di MySQL harus memenuhi kebijakan keamanan (minimal 8 karakter, kombinasi huruf besar, huruf kecil, angka, dan simbol).
+
+### 14.6 Troubleshooting phpMyAdmin
+
+Berikut beberapa error yang sering terjadi saat install atau mengakses phpMyAdmin beserta solusinya:
+
 ---
 
-## 15. Catatan Error phpMyAdmin: Password Policy MySQL
-
-Saat instalasi, sempat terjadi error:
+#### ❌ Error: `Your password does not satisfy the current policy requirements`
 
 ```text
 ERROR 1819 (HY000): Your password does not satisfy the current policy requirements
 ```
 
-Penyebab:
+**Penyebab:** Password policy MySQL terlalu ketat sehingga menolak password yang dibuat saat instalasi phpMyAdmin.
 
-MySQL memiliki aturan password policy yang menolak password yang dianggap lemah.
+**Solusi:**
 
-Cek plugin MySQL:
-
-```sql
-SHOW PLUGINS;
+```bash
+sudo mysql
 ```
-
-Pada server ini, plugin `validate_password` tidak terlihat di daftar plugin. Kemungkinan policy berasal dari component MySQL.
-
-Cek component:
-
-```sql
-SELECT * FROM mysql.component;
-```
-
-Jika ada:
-
-```text
-file://component_validate_password
-```
-
-Matikan sementara:
 
 ```sql
 UNINSTALL COMPONENT 'file://component_validate_password';
+EXIT;
 ```
 
-Setelah itu bersihkan instalasi phpMyAdmin yang gagal:
+Lalu ulangi instalasi phpMyAdmin:
 
 ```bash
-apt remove --purge phpmyadmin -y
-apt autoremove -y
-rm -f /etc/dbconfig-common/phpmyadmin.conf
-rm -rf /etc/phpmyadmin
-dpkg --configure -a
-apt --fix-broken install -y
+sudo apt install phpmyadmin -y
 ```
 
-Install ulang:
-
-```bash
-apt update
-apt install phpmyadmin -y
-```
-
-Jika ingin mengaktifkan lagi password policy setelah selesai:
-
-```sql
-INSTALL COMPONENT 'file://component_validate_password';
-```
+> Jika instalasi sebelumnya sudah setengah jalan dan gagal, bersihkan dulu:
+>
+> ```bash
+> sudo apt remove --purge phpmyadmin -y
+> sudo apt autoremove -y
+> sudo rm -f /etc/dbconfig-common/phpmyadmin.conf
+> sudo rm -rf /etc/phpmyadmin
+> sudo dpkg --configure -a
+> sudo apt --fix-broken install -y
+> ```
+>
+> Baru kemudian install ulang:
+>
+> ```bash
+> sudo apt update
+> sudo apt install phpmyadmin -y
+> ```
 
 ---
 
-## 16. Aktifkan phpMyAdmin di Apache
+#### ❌ Tidak Bisa Login phpMyAdmin dengan User `root`
 
-Cek apakah konfigurasi phpMyAdmin tersedia:
+**Penyebab:** User `root` MySQL di Ubuntu menggunakan metode autentikasi `auth_socket`, yang hanya bisa diakses dari terminal dengan `sudo mysql`, bukan dari browser.
 
-```bash
-ls /etc/apache2/conf-available | grep phpmyadmin
-```
-
-Jika muncul `phpmyadmin.conf`, aktifkan:
-
-```bash
-a2enconf phpmyadmin
-systemctl restart apache2
-```
-
-Akses:
-
-```text
-http://IP_VPS_KAMU/phpmyadmin
-```
+**Solusi:** Gunakan user baru seperti `admin_db` atau `web_user` yang sudah dibuat di langkah 14.4.
 
 ---
 
-## 17. Jika `a2enconf phpmyadmin` Error
+#### ❌ Halaman `/phpmyadmin` Tidak Ditemukan (404)
 
-Jika muncul error:
+**Penyebab:** Konfigurasi phpMyAdmin belum diaktifkan di Apache.
+
+**Solusi:**
+
+```bash
+sudo ln -s /etc/phpmyadmin/apache.conf /etc/apache2/conf-available/phpmyadmin.conf
+sudo a2enconf phpmyadmin
+sudo systemctl reload apache2
+```
+
+Jika perintah `a2enconf phpmyadmin` menampilkan error:
 
 ```text
 ERROR: Conf phpmyadmin does not exist!
 ```
 
-Artinya file konfigurasi Apache untuk phpMyAdmin belum tersedia. Buat manual:
+Artinya file konfigurasi belum tersedia. Buat secara manual:
 
 ```bash
-nano /etc/apache2/conf-available/phpmyadmin.conf
+sudo nano /etc/apache2/conf-available/phpmyadmin.conf
 ```
 
-Isi:
+Isi dengan:
 
 ```apache
 Alias /phpmyadmin /usr/share/phpmyadmin
@@ -727,43 +888,16 @@ Alias /phpmyadmin /usr/share/phpmyadmin
 </Directory>
 ```
 
-Aktifkan:
+Lalu aktifkan:
 
 ```bash
-a2enconf phpmyadmin
-systemctl restart apache2
+sudo a2enconf phpmyadmin
+sudo systemctl restart apache2
 ```
 
 ---
 
-## 18. Buat User MySQL untuk Login phpMyAdmin
-
-Masuk MySQL:
-
-```bash
-mysql
-```
-
-Buat user admin:
-
-```sql
-CREATE USER 'adminpma'@'localhost' IDENTIFIED BY 'AdminPma@2026!';
-GRANT ALL PRIVILEGES ON *.* TO 'adminpma'@'localhost' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
-EXIT;
-```
-
-Login phpMyAdmin:
-
-```text
-URL      : http://IP_VPS_KAMU/phpmyadmin
-Username : adminpma
-Password : AdminPma@2026!
-```
-
----
-
-## 19. Error Browser: ERR_NO_BUFFER_SPACE
+## 15. Error Browser: ERR_NO_BUFFER_SPACE
 
 Saat login phpMyAdmin sempat muncul:
 
@@ -823,7 +957,7 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 ---
 
-## 20. Perintah Monitoring dan Troubleshooting
+## 16. Perintah Monitoring dan Troubleshooting
 
 Cek Apache:
 
@@ -880,7 +1014,7 @@ ufw status
 
 ---
 
-## 21. Ringkasan Command Utama
+## 17. Ringkasan Command Utama
 
 ```bash
 apt update && apt upgrade -y
@@ -906,7 +1040,7 @@ systemctl restart apache2
 
 ---
 
-## 22. Checklist Akhir
+## 18. Checklist Akhir
 
 Pastikan semua service aktif:
 
@@ -953,7 +1087,7 @@ Folder   : public_html/
 
 ---
 
-## 23. Catatan Keamanan
+## 19. Catatan Keamanan
 
 Untuk server produksi, disarankan:
 
@@ -971,7 +1105,7 @@ apt update && apt upgrade -y
 
 ---
 
-## 24. Status Konfigurasi Saat Ini
+## 20. Status Konfigurasi Saat Ini
 
 Berdasarkan konfigurasi yang sudah dilakukan:
 
