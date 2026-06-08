@@ -187,7 +187,7 @@ systemctl restart apache2
 
 Penjelasan:
 
-- `upload_max_filesize`: maksimal ukuran file upload.
+- `upload_max_filesize`: maksimal ukuran file uploadd.
 - `post_max_size`: maksimal ukuran request POST.
 - `memory_limit`: batas penggunaan memori PHP.
 - `max_execution_time`: waktu maksimal eksekusi script.
